@@ -17,20 +17,57 @@
 	"ocx": "1.0.16", // Minimum OCX CLI version required
 
 	"components": [
-		// Add your components here
-		// Supported types:
-		//   - skill     - Knowledge modules (markdown files)
-		//   - agent     - AI personas with custom prompts
-		//   - plugin    - TypeScript plugins that extend functionality
-		//   - command   - User-invokable commands
-		//   - tool      - Custom tool implementations
-		//   - bundle    - Collections of related components
-		//   - profile   - Shareable profile configuration
 		{
 			"name": "hello-world",
 			"type": "skill",
 			"description": "An example skill to get you started",
 			"files": ["skills/hello-world/SKILL.md"]
+		},
+
+		// ATC agents — Agent Traffic Control for OpenCode
+		{
+			"name": "coordinate",
+			"type": "agent",
+			"description": "Autonomous execution coordinator — dispatches concurrent workers, reviews completions, manages fix/close/file cycles until all beads are done",
+			"files": ["agents/coordinate.md"]
+		},
+		{
+			"name": "plan-review",
+			"type": "agent",
+			"description": "Reviews plans/proposals for correctness and implementability",
+			"files": ["agents/plan-review.md"]
+		},
+		{
+			"name": "review",
+			"type": "agent",
+			"description": "Reviews code changes (commits/PRs/diffs) for quality and correctness",
+			"files": ["agents/review.md"]
+		},
+		{
+			"name": "sketch",
+			"type": "agent",
+			"description": "Research-first planning agent — transforms brain dumps into reviewed proposals and decomposed bead graphs",
+			"files": ["agents/sketch.md"]
+		},
+		{
+			"name": "worker",
+			"type": "agent",
+			"description": "Implements a single bead — researches, codes, tests, commits, and reports completion",
+			"files": ["agents/worker.md"]
+		},
+
+		// ATC bundle — installs the full Agent Traffic Control agent set
+		{
+			"name": "atc",
+			"type": "bundle",
+			"description": "Agent Traffic Control — the full ATC agent set for OpenCode (coordinate, sketch, worker, review, plan-review)",
+			"dependencies": [
+				"coordinate",
+				"plan-review",
+				"review",
+				"sketch",
+				"worker"
+			]
 		}
 	]
 }
