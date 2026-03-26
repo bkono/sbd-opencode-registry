@@ -47,11 +47,15 @@ bun run deploy
 Once deployed, users can add components from your registry:
 
 ```bash
-# Add a component
-ocx add your-namespace/hello-world
+# Add a component directly (using --from for ephemeral access)
+ocx add hello-world --from https://your-registry.workers.dev
 
-# Or specify the registry URL
-ocx add hello-world --registry https://your-registry.workers.dev
+# Or add the registry permanently with a custom alias
+ocx registry add https://your-registry.workers.dev --name myreg
+ocx add myreg/hello-world
+
+# Or install a profile
+ocx profile add my-profile --source myreg/my-profile --from https://your-registry.workers.dev --global
 ```
 
 ## Project Structure
@@ -79,10 +83,10 @@ mkdir -p files/skills/my-skill
 echo "# My Skill\n\nInstructions..." > files/skills/my-skill/SKILL.md
 
 # Plugin
-touch files/plugin/my-plugin.ts
+touch files/plugins/my-plugin.ts
 
 # Agent
-touch files/agent/my-agent.md
+touch files/agents/my-agent.md
 ```
 
 ### 2. Register it in `registry.jsonc`
@@ -92,7 +96,7 @@ touch files/agent/my-agent.md
   "components": [
     {
       "name": "my-skill",
-      "type": "ocx:skill",
+      "type": "skill",
       "description": "What it does",
       "files": ["skills/my-skill/SKILL.md"]
     }
@@ -110,13 +114,13 @@ bun run build && bun run deploy
 
 | Type | Purpose | Format |
 |------|---------|--------|
-| `ocx:skill` | AI behavior instructions | Markdown |
-| `ocx:plugin` | OpenCode extensions | TypeScript |
-| `ocx:agent` | Agent role definitions | Markdown |
-| `ocx:command` | Custom TUI commands | Markdown |
-| `ocx:tool` | Custom tool implementations | TypeScript |
-| `ocx:bundle` | Component collections | JSON |
-| `ocx:profile` | Shareable profile configuration | JSON |
+| `skill` | AI behavior instructions | Markdown |
+| `plugin` | OpenCode extensions | TypeScript |
+| `agent` | Agent role definitions | Markdown |
+| `command` | Custom TUI commands | Markdown |
+| `tool` | Custom tool implementations | TypeScript |
+| `bundle` | Component collections | JSON |
+| `profile` | Shareable profile configuration | JSON |
 
 See [AGENTS.md](./AGENTS.md) for detailed documentation on each type.
 
@@ -136,9 +140,10 @@ Edit `netlify.toml`. Build command and publish directory are pre-configured.
 
 ## Documentation
 
-- [OCX CLI Documentation](https://github.com/kdcokenny/ocx)
-- [OpenCode Reference](https://raw.githubusercontent.com/kdcokenny/ocx/main/docs/OPENCODE_REFERENCE.md)
-- [Registry Protocol](https://raw.githubusercontent.com/kdcokenny/ocx/main/docs/REGISTRY_PROTOCOL.md)
+- [AGENTS.md](./AGENTS.md) - Complete guide including [best practices](./AGENTS.md#best-practices)
+- [OCX CLI Documentation](https://ocx.kdco.dev/cli/commands)
+- [OpenCode Reference](https://ocx.kdco.dev/reference/opencode)
+- [Registry Protocol](https://ocx.kdco.dev/registries/protocol)
 
 ## License
 
