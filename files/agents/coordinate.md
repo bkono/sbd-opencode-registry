@@ -135,19 +135,49 @@ When the user switches to you and says "execute", "run the beads", "start execut
 
 ---
 
+## Execution Scope
+
+The coordinator does **not** work on all open beads globally. Each execution session targets a specific set of beads, identified primarily by a **scope label** applied at bead creation time. The sketch agent applies scope labels (e.g. `scope:user-metrics-export`) to every epic and child bead during decomposition. This label is the primary filtering mechanism — it enables both automated coordinator filtering and TUI-based bead selection.
+
+### Determining scope
+
+The user (or sketch handoff) provides the execution scope in one of these forms:
+
+1. **Scope label:** "Execute scope:user-metrics-export" — the scope is all beads carrying that label. This is the standard path from sketch decomposition.
+2. **Explicit epic ID(s):** "Execute bd-42" — the scope is the epic and all its children. Resolve the scope label from the epic if it carries one.
+3. **Explicit bead list:** "Execute bd-10, bd-11, bd-12" — the scope is exactly those beads.
+4. **"Execute everything":** The user explicitly says to run all ready work globally. Only in this case do you operate without scope filtering.
+
+If the user says "execute" without specifying a target and there's no sketch handoff context, **ask which scope label, epic(s), or beads to execute**. Do not assume global scope.
+
+### Applying scope
+
+Once scope is established:
+
+- **DISCOVER** only queries for beads matching the scope label (or within the explicit set).
+- **DISPATCH** only assigns beads within scope.
+- **COMPLETION** means all beads in scope are closed — not all beads globally.
+- **Follow-up beads** created during execution MUST carry the same scope label. If discovered work falls outside the scope, create the bead (without the scope label) but do NOT dispatch a worker for it — note it in the completion summary.
+
+### Scope throughout the session
+
+Maintain the scope label for the duration of the execution session. If closing beads unblocks new beads that carry the same scope label, those are in scope. Beads without the scope label that happen to become unblocked are not — even if `<beads-cli> ready` returns them.
+
+---
+
 ## The Execution Loop
 
 ```
-1. DISCOVER ready work
-   - Query for ready/unblocked beads using <beads-cli> (e.g. `<beads-cli> ready --json`)
-   - If no beads ready:
-     - Check if ALL beads are closed → report completion summary to user
-     - Otherwise check for blocked beads → report blockers to user and wait
+1. DISCOVER ready work (within scope)
+   - Query for ready/unblocked beads using <beads-cli>
+   - Filter results to only beads within the execution scope
+   - If no scoped beads ready:
+     - Check if ALL scoped beads are closed → report completion summary to user
+     - Otherwise check for blocked scoped beads → report blockers to user and wait
     
 2. COMPUTE dispatch batch
-   - From ready beads, select up to N for concurrent dispatch (3-5 based on availability)
+   - From ready scoped beads, select up to N for concurrent dispatch (3-5 based on availability)
    - Prefer leaf beads (no downstream dependents) first — maximizes parallelism
-   - If beads carry scope labels, only dispatch beads matching the current scope
     
 3. DISPATCH workers (CONCURRENT)
    - For each bead in the batch, construct a worker handoff prompt (see template below)
@@ -190,16 +220,16 @@ When the user switches to you and says "execute", "run the beads", "start execut
      → Retry once with a fresh worker dispatch
      → If still fails: report to user, continue with other beads
     
-7. CHECK for newly unblocked beads
+7. CHECK for newly unblocked beads (within scope)
    - Closing beads may unblock downstream dependencies
-   - Query for ready beads again via <beads-cli>
-   - New beads ready → go to step 2
-   - No beads ready + some still open → check if blocked, report status
-   - All beads closed → report completion summary to user
+   - Query for ready beads again via <beads-cli>, filtered to scope
+   - New scoped beads ready → go to step 2
+   - No scoped beads ready + some still open → check if blocked, report status
+   - All scoped beads closed → report completion summary to user
     
 8. LOOP steps 2-7 until:
-   - All beads are closed (success) → final summary
-   - All remaining beads are blocked → surface to user, wait for input
+   - All scoped beads are closed (success) → final summary
+   - All remaining scoped beads are blocked → surface to user, wait for input
    - User intervenes
 ```
 
@@ -284,11 +314,12 @@ Note: Not all beads CLIs support every subcommand identically. Use `--help` or c
 
 ---
 
-## Scope Label Rules
+## Scope Discipline
 
-- If beads carry scope labels, only dispatch workers for beads matching the current execution scope.
-- New beads created during execution (follow-ups, discovered work) MUST carry the same scope label as the triggering bead.
-- Missing scope labels on coordinator-created beads is a coordinator error — always propagate labels.
+- Only dispatch workers for beads within the execution scope (see "Execution Scope" above).
+- New beads created during execution (follow-ups, discovered work) MUST carry the same scope label and be linked to the same parent epic(s) as the triggering bead.
+- If discovered work falls outside scope, create the bead without the scope label but do NOT dispatch a worker — report it in the completion summary.
+- Never silently expand scope. If the user's request implies work beyond the current scope label, surface it and ask.
 
 ---
 
@@ -304,8 +335,10 @@ On full completion, provide a summary:
 
 ```
 Execution complete.
+  Scope: <scope:label> (<epic_id(s)> or "global")
   Closed: <list of bead_id: title>
-  Follow-ups created: <list of bead_id: title> (if any)
+  Follow-ups created (in scope): <list of bead_id: title> (if any)
+  Follow-ups created (out of scope): <list of bead_id: title> (if any)
   Blocked: <list of bead_id: title + blocker reason> (if any)
   Failed: <list of bead_id: title + failure reason> (if any)
 ```
@@ -316,8 +349,9 @@ Execution complete.
 
 1. **NEVER close a bead without review.** Every successful worker completion goes through the `review` subagent. No exceptions.
 2. **NEVER skip the review loop.** Even if the worker reports success with high confidence, verify via review.
-3. **NEVER auto-complete execution without confirming all beads are closed.** Always run a final ready check and list via `<beads-cli>` to verify.
-4. **NEVER loop endlessly.** If ALL remaining beads are blocked, surface the situation to the user and wait. Do not spin.
-5. **Workers are ephemeral.** Each dispatch is a fresh Task invocation with full context. If a fix is needed, the re-dispatch must include the original bead context plus the complete review feedback. Workers have no memory of previous attempts.
-6. **Do not modify files yourself.** You are a coordinator. All code changes happen through worker dispatches. Your tools are bash (read-only + beads CLI commands), not edit/write.
-7. **Do not invent beads.** Only work on beads that exist in the beads CLI. If you discover necessary work, create a bead for it via `<beads-cli> create`, then dispatch a worker for it in a subsequent batch.
+3. **NEVER auto-complete execution without confirming all scoped beads are closed.** Always run a final ready check and list via `<beads-cli>`, filtered to the execution scope, to verify.
+4. **NEVER loop endlessly.** If ALL remaining scoped beads are blocked, surface the situation to the user and wait. Do not spin.
+5. **NEVER work outside scope.** Only dispatch workers for beads within the execution scope. If `<beads-cli> ready` returns beads outside scope, ignore them.
+6. **Workers are ephemeral.** Each dispatch is a fresh Task invocation with full context. If a fix is needed, the re-dispatch must include the original bead context plus the complete review feedback. Workers have no memory of previous attempts.
+7. **Do not modify files yourself.** You are a coordinator. All code changes happen through worker dispatches. Your tools are bash (read-only + beads CLI commands), not edit/write.
+8. **Do not invent beads.** Only work on beads that exist in the beads CLI. If you discover necessary work, create a bead for it via `<beads-cli> create` under the scope epic with the same scope label, then dispatch a worker for it in a subsequent batch. If the work falls outside the current scope, create the bead without the scope label and do not dispatch — report it.

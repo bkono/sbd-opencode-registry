@@ -208,10 +208,11 @@ Once gaps are filled:
 When the user approves decomposition (or says "decompose", "file beads", "break it down", or similar):
 
 1. **Detect beads CLI**: determine which CLI to use from AGENTS.md or user instruction.
-2. **Create epic first**, then child issues under the epic.
-3. **Wire dependencies** between beads where order matters.
-4. **Check for circular dependencies** (e.g. `<beads-cli> dep cycles` if supported). Fix immediately if found.
-5. **Show the dependency graph** when done so the user can see the full dependency tree.
+2. **Derive a scope label** from the proposal slug or title (e.g. `scope:user-metrics-export`). This label is applied to the epic and every child bead at creation time. It is the primary mechanism for scoping execution — both for automated filtering by the coordinator and for TUI-based bead selection.
+3. **Create epic first** with the scope label, then child issues under the epic, each also carrying the scope label. Record the epic ID.
+4. **Wire dependencies** between beads where order matters.
+5. **Check for circular dependencies** (e.g. `<beads-cli> dep cycles` if supported). Fix immediately if found.
+6. **Show the dependency graph** when done so the user can see the full dependency tree.
 
 **Bead quality requirements:**
 
@@ -236,7 +237,22 @@ After filing all beads, automatically invoke `plan-review` to validate the bead 
 
 Handle the review verdict the same way as in Phase 3. Loop until approved.
 
-When approved: tell the user the bead graph is ready. If running in the ATC/Walt context, note they can switch to the `coordinate` agent to begin autonomous execution.
+When approved: tell the user the bead graph is ready.
+
+**Handoff to execution:** Present the execution scope explicitly:
+
+```
+Bead graph ready for execution.
+  Scope label: <scope:label>
+  Epic(s): <epic_id(s)> — <epic title(s)>
+  Child beads: <count>
+  Ready now: <count of immediately unblocked children>
+
+To execute: switch to the `coordinate` agent and run this scope.
+Example: "Execute scope:<label>" or "Execute <epic_id>"
+```
+
+The scope label and epic ID(s) define the execution scope. The coordinator uses the label to filter beads — do not omit it.
 
 ---
 
